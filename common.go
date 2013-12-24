@@ -5,6 +5,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ func BuildPath(partialPath, prefix string) (string, error) {
 	}
 	for _, file := range dirFiles {
 		if file.IsDir() && strings.HasPrefix(file.Name(), prefix) {
-			return file.Name(), nil
+			return path.Join(partialPath, file.Name()), nil
 		}
 	}
 	return "", os.ErrNotExist
