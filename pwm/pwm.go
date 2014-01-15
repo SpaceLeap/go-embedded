@@ -7,11 +7,18 @@ import (
 	"github.com/SpaceLeap/go-embedded"
 )
 
+type Polarity uint
+
+const (
+	POLARITY_LOW  Polarity = 0
+	POLARITY_HIGH Polarity = 1
+)
+
 type PWM struct {
 	key          string
-	dutyCycle    float32
-	frequencyGHz float32
-	polarity     int
+	periodNs     uint32
+	dutyNs       uint32
+	polarity     Polarity
 	periodFile   *os.File
 	dutyFile     *os.File
 	polarityFile *os.File
@@ -32,7 +39,11 @@ func Init(deviceTreePrefix, pwmDevicePrefix string) error {
 	return nil
 }
 
-func NewPWM(key string, dutyCycle, frequencyGHz float32, polarity int) (*PWM, error) {
+func Cleanup() error {
+	return embedded.UnloadDeviceTree(deviceTree)
+}
+
+func NewPWM(key string, periodNs, dutyNs uint32, polarity Polarity) (*PWM, error) {
 	err := embedded.LoadDeviceTree(devicePrefix + key)
 	if err != nil {
 		return nil, err
@@ -77,17 +88,17 @@ func NewPWM(key string, dutyCycle, frequencyGHz float32, polarity int) (*PWM, er
 		polarityFile: polarityFile,
 	}
 
-	err = pwm.SetFrequency(frequencyGHz)
-	if err != nil {
-		pwm.Close()
-		return nil, err
-	}
 	err = pwm.SetPolarity(polarity)
 	if err != nil {
 		pwm.Close()
 		return nil, err
 	}
-	err = pwm.SetDutyCycle(dutyCycle)
+	err = pwm.SetPeriod(periodNs)
+	if err != nil {
+		pwm.Close()
+		return nil, err
+	}
+	err = pwm.SetDuty(dutyNs)
 	if err != nil {
 		pwm.Close()
 		return nil, err
@@ -100,75 +111,48 @@ func (pwm *PWM) Key() string {
 	return pwm.key
 }
 
-// Frequency returns the signal frequency in Giga Hertz
-func (pwm *PWM) Frequency() float32 {
-	return pwm.frequencyGHz
+func (pwm *PWM) Period() (nanoseconds uint32) {
+	return pwm.periodNs
 }
 
-// SetFrequency sets the signal frequency in Giga Hertz
-func (pwm *PWM) SetFrequency(frequencyGHz float32) error {
-	if frequencyGHz <= 0 {
-		return fmt.Errorf("invalid frequency: %f", frequencyGHz)
-	}
-
-	periodNs := uint(1e9 / frequencyGHz)
-	_, err := fmt.Fprintf(pwm.periodFile, "%d", periodNs)
+func (pwm *PWM) SetPeriod(nanoseconds uint32) error {
+	_, err := fmt.Fprintf(pwm.periodFile, "%d", nanoseconds)
 	if err != nil {
 		return err
 	}
-
-	pwm.frequencyGHz = frequencyGHz
+	pwm.periodNs = nanoseconds
 	return nil
 }
 
-func (pwm *PWM) Polarity() int {
+func (pwm *PWM) Duty() (nanoseconds uint32) {
+	return pwm.dutyNs
+}
+
+func (pwm *PWM) SetDuty(nanoseconds uint32) error {
+	_, err := fmt.Fprintf(pwm.dutyFile, "%d", nanoseconds)
+	if err != nil {
+		return err
+	}
+	pwm.dutyNs = nanoseconds
+	return nil
+}
+
+func (pwm *PWM) Polarity() Polarity {
 	return pwm.polarity
 }
 
-func (pwm *PWM) SetPolarity(polarity int) error {
-	if polarity < 0 || polarity > 1 {
-		return fmt.Errorf("polarity must be either 0 or 1")
-	}
-
+func (pwm *PWM) SetPolarity(polarity Polarity) error {
 	_, err := fmt.Fprintf(pwm.polarityFile, "%d", polarity)
 	if err != nil {
 		return err
 	}
-
 	pwm.polarity = polarity
 	return nil
 }
 
-// DutyCycle returns the duty cicly of the signal with range from 0.0 to 1.0.
-func (pwm *PWM) DutyCycle() float32 {
-	return pwm.dutyCycle
-}
-
-// SetDutyCycle sets the duty cicly of the signal.
-// dutyCycle must be in the range from 0.0 to 1.0
-func (pwm *PWM) SetDutyCycle(dutyCycle float32) error {
-	if dutyCycle < 0 || dutyCycle > 1 {
-		return fmt.Errorf("dutyCycle %f not in range 0.0 to 1.0", dutyCycle)
-	}
-
-	periodNs := 1e9 / pwm.frequencyGHz
-	duty := uint(periodNs * dutyCycle)
-	_, err := fmt.Fprintf(pwm.dutyFile, "%d", duty)
-	if err != nil {
-		return err
-	}
-
-	pwm.dutyCycle = dutyCycle
-	return nil
-}
-
-func (pwm *PWM) Close() {
-	embedded.UnloadDeviceTree(devicePrefix + pwm.key)
+func (pwm *PWM) Close() error {
 	pwm.periodFile.Close()
 	pwm.dutyFile.Close()
 	pwm.polarityFile.Close()
-}
-
-func CleanupPWM() error {
-	return embedded.UnloadDeviceTree(deviceTree)
+	return embedded.UnloadDeviceTree(devicePrefix + pwm.key)
 }
