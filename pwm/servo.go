@@ -3,7 +3,7 @@ package pwm
 import "time"
 
 func servoPositionToDuty(position float32) time.Duration {
-	return time.Duration(760e3 + uint32(position*1480e3+0.5))
+	return time.Duration(700e3 + uint32(position*1600e3+0.5))
 }
 
 type Servo struct {
