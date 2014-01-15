@@ -3,6 +3,7 @@ package pwm
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/SpaceLeap/go-embedded"
 )
@@ -16,8 +17,8 @@ const (
 
 type PWM struct {
 	key          string
-	periodNs     uint32
-	dutyNs       uint32
+	period       time.Duration
+	duty         time.Duration
 	polarity     Polarity
 	periodFile   *os.File
 	dutyFile     *os.File
@@ -43,7 +44,7 @@ func Cleanup() error {
 	return embedded.UnloadDeviceTree(deviceTree)
 }
 
-func NewPWM(key string, periodNs, dutyNs uint32, polarity Polarity) (*PWM, error) {
+func NewPWM(key string, period, duty time.Duration, polarity Polarity) (*PWM, error) {
 	err := embedded.LoadDeviceTree(devicePrefix + key)
 	if err != nil {
 		return nil, err
@@ -93,12 +94,12 @@ func NewPWM(key string, periodNs, dutyNs uint32, polarity Polarity) (*PWM, error
 		pwm.Close()
 		return nil, err
 	}
-	err = pwm.SetPeriod(periodNs)
+	err = pwm.SetPeriod(period)
 	if err != nil {
 		pwm.Close()
 		return nil, err
 	}
-	err = pwm.SetDuty(dutyNs)
+	err = pwm.SetDuty(duty)
 	if err != nil {
 		pwm.Close()
 		return nil, err
@@ -111,29 +112,29 @@ func (pwm *PWM) Key() string {
 	return pwm.key
 }
 
-func (pwm *PWM) Period() (nanoseconds uint32) {
-	return pwm.periodNs
+func (pwm *PWM) Period() time.Duration {
+	return pwm.period
 }
 
-func (pwm *PWM) SetPeriod(nanoseconds uint32) error {
-	_, err := fmt.Fprintf(pwm.periodFile, "%d", nanoseconds)
+func (pwm *PWM) SetPeriod(period time.Duration) error {
+	_, err := fmt.Fprintf(pwm.periodFile, "%d", period)
 	if err != nil {
 		return err
 	}
-	pwm.periodNs = nanoseconds
+	pwm.period = period
 	return nil
 }
 
-func (pwm *PWM) Duty() (nanoseconds uint32) {
-	return pwm.dutyNs
+func (pwm *PWM) Duty() time.Duration {
+	return pwm.duty
 }
 
-func (pwm *PWM) SetDuty(nanoseconds uint32) error {
-	_, err := fmt.Fprintf(pwm.dutyFile, "%d", nanoseconds)
+func (pwm *PWM) SetDuty(duty time.Duration) error {
+	_, err := fmt.Fprintf(pwm.dutyFile, "%d", duty)
 	if err != nil {
 		return err
 	}
-	pwm.dutyNs = nanoseconds
+	pwm.duty = duty
 	return nil
 }
 

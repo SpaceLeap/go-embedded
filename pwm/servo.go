@@ -1,7 +1,9 @@
 package pwm
 
-func servoPositionToDuty(position float32) (nanoseconds uint32) {
-	return 950e3 + uint32(position*1100e3+0.5)
+import "time"
+
+func servoPositionToDuty(position float32) time.Duration {
+	return time.Duration(950e3 + uint32(position*1100e3+0.5))
 }
 
 type Servo struct {
