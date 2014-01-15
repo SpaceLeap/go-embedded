@@ -3,7 +3,7 @@ package pwm
 import "time"
 
 func servoPositionToDuty(position float32) time.Duration {
-	return time.Duration(950e3 + uint32(position*1100e3+0.5))
+	return time.Duration(760e3 + uint32(position*1480e3+0.5))
 }
 
 type Servo struct {
@@ -12,7 +12,7 @@ type Servo struct {
 }
 
 func NewServo(key string, position float32) (*Servo, error) {
-	pwm, err := NewPWM(key, 2e7, servoPositionToDuty(position), POLARITY_HIGH)
+	pwm, err := NewPWM(key, 2e7, servoPositionToDuty(position), POLARITY_LOW)
 	if err != nil {
 		return nil, err
 	}
@@ -42,4 +42,9 @@ func (servo *Servo) SetPosition(position float32) error {
 	}
 	servo.position = position
 	return nil
+}
+
+// Closes the current servo instance
+func (servo *Servo) Close() error {
+	return servo.pwm.Close()
 }
