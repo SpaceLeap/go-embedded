@@ -49,7 +49,7 @@ type GPIO struct {
 }
 
 // NewGPIO exports the GPIO pin nr.
-func NewGPIO(nr int) (*GPIO, error) {
+func NewGPIO(nr int, direction Direction) (*GPIO, error) {
 	gpio := &GPIO{nr: nr}
 
 	export, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0666)
@@ -59,6 +59,11 @@ func NewGPIO(nr int) (*GPIO, error) {
 	defer export.Close()
 
 	_, err = fmt.Fprintf(export, "%d", gpio.nr)
+	if err != nil {
+		return nil, err
+	}
+
+	err = gpio.SetDirection(direction)
 	if err != nil {
 		return nil, err
 	}
