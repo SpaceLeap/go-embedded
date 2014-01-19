@@ -8,9 +8,11 @@ import (
 	"github.com/ungerik/go-quick"
 )
 
+type Value int
+
 const (
-	HIGH = true
-	LOW  = false
+	LOW  Value = 0
+	HIGH Value = 1
 
 	_EPOLLET = 1 << 31
 )
@@ -18,17 +20,17 @@ const (
 type Edge string
 
 const (
-	NO_EDGE      Edge = "none"
-	RISING_EDGE  Edge = "rising"
-	FALLING_EDGE Edge = "falling"
-	BOTH_EDGES   Edge = "both"
+	EDGE_NONE    Edge = "none"
+	EDGE_RISING  Edge = "rising"
+	EDGE_FALLING Edge = "falling"
+	EDGE_BOTH    Edge = "both"
 )
 
 type Direction string
 
 const (
-	INPUT  Direction = "in"
-	OUTPUT Direction = "out"
+	DIRECTION_IN  Direction = "in"
+	DIRECTION_OUT Direction = "out"
 	// ALT0   Direction = 4
 )
 
@@ -49,7 +51,7 @@ type GPIO struct {
 }
 
 // NewGPIO exports the GPIO pin nr.
-func NewGPIO(nr int, direction Direction) (*GPIO, error) {
+func NewGPIO(nr int, direction ...Direction) (*GPIO, error) {
 	gpio := &GPIO{nr: nr}
 
 	export, err := os.OpenFile("/sys/class/gpio/export", os.O_WRONLY, 0666)
@@ -63,9 +65,11 @@ func NewGPIO(nr int, direction Direction) (*GPIO, error) {
 		return nil, err
 	}
 
-	err = gpio.SetDirection(direction)
-	if err != nil {
-		return nil, err
+	if len(direction) > 0 {
+		err = gpio.SetDirection(direction[0])
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return gpio, nil
@@ -101,10 +105,10 @@ func (gpio *GPIO) Direction() (Direction, error) {
 	if err != nil {
 		return "", err
 	}
-	if Direction(direction) == OUTPUT {
-		return OUTPUT, nil
+	if Direction(direction) == DIRECTION_OUT {
+		return DIRECTION_OUT, nil
 	} else {
-		return INPUT, nil
+		return DIRECTION_IN, nil
 	}
 }
 
@@ -119,7 +123,7 @@ func (gpio *GPIO) SetDirection(direction Direction) error {
 	return err
 }
 
-func (gpio *GPIO) openValueFile() error {
+func (gpio *GPIO) ensureValueFileIsOpen() error {
 	if gpio.value != nil {
 		return nil
 	}
@@ -131,28 +135,32 @@ func (gpio *GPIO) openValueFile() error {
 	return err
 }
 
-func (gpio *GPIO) Value() (bool, error) {
-	if err := gpio.openValueFile(); err != nil {
-		return false, err
+func (gpio *GPIO) Value() (Value, error) {
+	if err := gpio.ensureValueFileIsOpen(); err != nil {
+		return 0, err
 	}
 	gpio.value.Seek(0, os.SEEK_SET)
 	val := make([]byte, 1)
 	_, err := gpio.value.Read(val)
 	if err != nil {
-		return false, err
+		return 0, err
 	}
-	return val[0] == '1', nil
+	if val[0] == '0' {
+		return LOW, nil
+	} else {
+		return HIGH, nil
+	}
 }
 
-func (gpio *GPIO) SetValue(value bool) (err error) {
-	if err = gpio.openValueFile(); err != nil {
+func (gpio *GPIO) SetValue(value Value) (err error) {
+	if err = gpio.ensureValueFileIsOpen(); err != nil {
 		return err
 	}
 	gpio.value.Seek(0, os.SEEK_SET)
-	if value {
-		_, err = gpio.value.Write([]byte{'1'})
-	} else {
+	if value == 0 {
 		_, err = gpio.value.Write([]byte{'0'})
+	} else {
+		_, err = gpio.value.Write([]byte{'1'})
 	}
 	return err
 }
@@ -168,10 +176,10 @@ func (gpio *GPIO) SetEdge(edge Edge) error {
 	return err
 }
 
-func (gpio *GPIO) AddEdgeDetect(edge Edge) (chan bool, error) {
+func (gpio *GPIO) AddEdgeDetect(edge Edge) (chan Value, error) {
 	gpio.RemoveEdgeDetect()
 
-	err := gpio.SetDirection(INPUT)
+	err := gpio.SetDirection(DIRECTION_IN)
 	if err != nil {
 		return nil, err
 	}
@@ -179,7 +187,7 @@ func (gpio *GPIO) AddEdgeDetect(edge Edge) (chan bool, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = gpio.openValueFile()
+	err = gpio.ensureValueFileIsOpen()
 	if err != nil {
 		return nil, err
 	}
@@ -208,7 +216,7 @@ func (gpio *GPIO) AddEdgeDetect(edge Edge) (chan bool, error) {
 
 	gpio.epfd.Set(epfd)
 
-	valueChan := make(chan bool)
+	valueChan := make(chan Value)
 	go func() {
 		for gpio.epfd.Get() != 0 {
 			n, _ := syscall.EpollWait(epfd, make([]syscall.EpollEvent, 1), -1)
@@ -230,7 +238,7 @@ func (gpio *GPIO) RemoveEdgeDetect() {
 	}
 }
 
-func (gpio *GPIO) BlockingWaitForEdge(edge Edge) (value bool, err error) {
+func (gpio *GPIO) BlockingWaitForEdge(edge Edge) (value Value, err error) {
 	valueChan, err := gpio.AddEdgeDetect(edge)
 	if err == nil {
 		value = <-valueChan
