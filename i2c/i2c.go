@@ -17,23 +17,23 @@ func SwapBytes(word uint16) uint16 {
 }
 
 type Err struct {
-	function string
-	cause    error
+	method string
+	cause  error
 }
 
 func (err Err) Error() string {
-	return fmt.Sprintf("I2C.%s error: %s", err.function, err.cause)
+	return fmt.Sprintf("I2C.%s error: %s", err.method, err.cause)
 }
 
-func wrapErr(function string, err error) error {
+func wrapErr(method string, err error) error {
 	if err == nil {
 		return nil
 	}
 	if e, ok := err.(Err); ok {
-		e.function = function
+		e.method = method
 		return e
 	}
-	return Err{function, err}
+	return Err{method, err}
 }
 
 // I2C is a port of https://github.com/bivab/smbus-cffi/
