@@ -3,7 +3,9 @@ package gpio
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"syscall"
+	"time"
 
 	"github.com/ungerik/go-quick"
 )
@@ -25,6 +27,11 @@ const (
 	EDGE_FALLING Edge = "falling"
 	EDGE_BOTH    Edge = "both"
 )
+
+type EdgeEvent struct {
+	Time  time.Time
+	Value Value
+}
 
 type Direction string
 
@@ -70,7 +77,7 @@ func NewGPIO(nr int, direction Direction) (*GPIO, error) {
 
 // Close unexports the GPIO pin.
 func (gpio *GPIO) Close() error {
-	gpio.DisableEdgeDetect()
+	gpio.DisableEdgeDetection()
 
 	if gpio.valueFile != nil {
 		gpio.valueFile.Close()
@@ -138,94 +145,25 @@ func (gpio *GPIO) setEdge(edge Edge) error {
 		return nil
 	}
 	filename := fmt.Sprintf("/sys/class/gpio/gpio%d/edge", gpio.nr)
-	return quick.FileSetString(filename, string(edge))
+	err := quick.FileSetString(filename, string(edge))
+	if err == nil {
+		gpio.edge = edge
+	}
+	return err
 }
 
-// func (gpio *GPIO) EdgeDetectCallback(edge Edge, callback func(Value)) error {
-// 	gpio.DisableEdgeDetect()
-
-// 	err := gpio.SetDirection(DIRECTION_IN)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = gpio.SetEdge(edge)
-// 	if err != nil {
-// 		return err
-// 	}
-// 	err = gpio.ensureValueFileIsOpen()
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	epollFd, err := syscall.EpollCreate(1)
-// 	if err != nil {
-// 		return err
-// 	}
-
-// 	event := &syscall.EpollEvent{
-// 		Events: syscall.EPOLLIN | _EPOLLET | syscall.EPOLLPRI,
-// 		Fd:     int32(gpio.valueFile.Fd()),
-// 	}
-// 	err = syscall.EpollCtl(epollFd, syscall.EPOLL_CTL_ADD, int(gpio.valueFile.Fd()), event)
-// 	if err != nil {
-// 		syscall.Close(epollFd)
-// 		return err
-// 	}
-
-// 	// / first time triggers with current state, so ignore
-// 	_, err = syscall.EpollWait(epollFd, make([]syscall.EpollEvent, 1), -1)
-// 	if err != nil {
-// 		syscall.Close(epollFd)
-// 		return err
-// 	}
-
-// 	gpio.epollFd.Set(epollFd)
-
-// 	go func() {
-// 		for gpio.epollFd.Get() != 0 {
-// 			n, _ := syscall.EpollWait(epollFd, make([]syscall.EpollEvent, 1), -1)
-// 			if n > 0 {
-// 				value, err := gpio.Value()
-// 				if err == nil {
-// 					callback(value)
-// 				}
-// 			}
-// 		}
-// 	}()
-
-// 	return nil
-// }
-
-// func (gpio *GPIO) EdgeDetect(edge Edge) (chan Value, error) {
-// 	valueChan := make(chan Value)
-// 	err := gpio.EdgeDetectCallback(edge, func(value Value) {
-// 		valueChan <- value
-// 	})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	return valueChan, nil
-// }
+var dummyEpollEvents = make([]syscall.EpollEvent, 1)
 
 func (gpio *GPIO) WaitForEdge(edge Edge) (value Value, err error) {
-	// valueChan, err := gpio.EdgeDetect(edge)
-	// if err == nil {
-	// 	value = <-valueChan
-	// 	gpio.DisableEdgeDetect()
-	// }
-	// return value, err
-
-	err = gpio.setEdge(edge)
-	if err != nil {
+	if err = gpio.setEdge(edge); err != nil {
 		return 0, err
 	}
-
-	err = gpio.ensureValueFileIsOpen()
-	if err != nil {
+	if err = gpio.ensureValueFileIsOpen(); err != nil {
 		return 0, err
 	}
 
 	epollFd := gpio.epollFd.Get()
+
 	if epollFd == 0 {
 		epollFd, err = syscall.EpollCreate(1)
 		if err != nil {
@@ -243,7 +181,7 @@ func (gpio *GPIO) WaitForEdge(edge Edge) (value Value, err error) {
 		}
 
 		// first time triggers with current state, so ignore
-		_, err = syscall.EpollWait(epollFd, make([]syscall.EpollEvent, 1), -1)
+		_, err = syscall.EpollWait(epollFd, dummyEpollEvents, -1)
 		if err != nil {
 			syscall.Close(epollFd)
 			return 0, err
@@ -252,22 +190,47 @@ func (gpio *GPIO) WaitForEdge(edge Edge) (value Value, err error) {
 		gpio.epollFd.Set(epollFd)
 	}
 
-	_, err = syscall.EpollWait(epollFd, make([]syscall.EpollEvent, 1), -1)
+	_, err = syscall.EpollWait(epollFd, dummyEpollEvents, -1)
 	if err != nil {
 		return 0, err
 	}
 	return gpio.Value()
 }
 
-func (gpio *GPIO) IsEdgeDetectEnabled() bool {
+func (gpio *GPIO) IsEdgeDetectionEnabled() bool {
 	return gpio.epollFd.Get() != 0
 }
 
-func (gpio *GPIO) DisableEdgeDetect() {
+func (gpio *GPIO) DisableEdgeDetection() {
 	epollFd := gpio.epollFd.Swap(0)
 	if epollFd != 0 {
 		syscall.EpollCtl(epollFd, syscall.EPOLL_CTL_DEL, int(gpio.valueFile.Fd()), new(syscall.EpollEvent))
 		syscall.Close(epollFd)
 	}
 	gpio.setEdge(EDGE_NONE)
+}
+
+// StartEdgeDetectCallbacks starts a thread that calls callback for every
+// detected edge. An error or DisableEdgeDetection will stops the thread.
+func (gpio *GPIO) StartEdgeDetectCallbacks(edge Edge, callback func(Value)) {
+	go func() {
+		runtime.LockOSThread()
+		for {
+			value, err := gpio.WaitForEdge(edge)
+			if err != nil {
+				return
+			}
+			callback(value)
+		}
+	}()
+}
+
+// StartEdgeDetectEvents starts a thread that sends EdgeEvent instances into
+// the events channel for every edge. EdgeEvent contains the time of the event,
+// to be also useful for buffered channels where the events are read later.
+// An error or DisableEdgeDetection will stops the thread.
+func (gpio *GPIO) StartEdgeDetectEvents(edge Edge, events chan EdgeEvent) {
+	gpio.StartEdgeDetectCallbacks(edge, func(value Value) {
+		events <- EdgeEvent{time.Now(), value}
+	})
 }
