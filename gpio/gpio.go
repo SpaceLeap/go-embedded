@@ -105,7 +105,7 @@ func (gpio *GPIO) ensureValueFileIsOpen() error {
 		return nil
 	}
 	filename := fmt.Sprintf("/sys/class/gpio/gpio%d/value", gpio.nr)
-	file, err := os.OpenFile(filename, os.O_RDWR, 0660)
+	file, err := os.OpenFile(filename, os.O_RDWR|syscall.O_NONBLOCK, 0660)
 	if err == nil {
 		gpio.valueFile = file
 	}
@@ -116,9 +116,8 @@ func (gpio *GPIO) Value() (Value, error) {
 	if err := gpio.ensureValueFileIsOpen(); err != nil {
 		return 0, err
 	}
-	gpio.valueFile.Seek(0, os.SEEK_SET)
 	val := make([]byte, 1)
-	_, err := gpio.valueFile.Read(val)
+	_, err := gpio.valueFile.ReadAt(val, 0)
 	if err != nil {
 		return 0, err
 	}
@@ -234,7 +233,7 @@ func (gpio *GPIO) WaitForEdge(edge Edge) (value Value, err error) {
 		}
 
 		event := &syscall.EpollEvent{
-			Events: syscall.EPOLLIN | _EPOLLET | syscall.EPOLLPRI,
+			Events: syscall.EPOLLIN | syscall.EPOLLPRI | _EPOLLET,
 			Fd:     int32(gpio.valueFile.Fd()),
 		}
 		err = syscall.EpollCtl(epollFd, syscall.EPOLL_CTL_ADD, int(gpio.valueFile.Fd()), event)
@@ -267,6 +266,7 @@ func (gpio *GPIO) IsEdgeDetectEnabled() bool {
 func (gpio *GPIO) DisableEdgeDetect() {
 	epollFd := gpio.epollFd.Swap(0)
 	if epollFd != 0 {
+		syscall.EpollCtl(epollFd, syscall.EPOLL_CTL_DEL, int(gpio.valueFile.Fd()), new(syscall.EpollEvent))
 		syscall.Close(epollFd)
 	}
 	gpio.setEdge(EDGE_NONE)
