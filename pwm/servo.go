@@ -2,8 +2,13 @@ package pwm
 
 import "time"
 
+var (
+	ServoCenter time.Duration = 1500 * time.Microsecond
+	ServoRange  time.Duration = 1600 * time.Microsecond
+)
+
 func servoPositionToDuty(position float32) time.Duration {
-	return time.Duration(700e3 + uint32(position*1600e3+0.5))
+	return (ServoCenter - ServoRange/2) + time.Duration(float64(position)*float64(ServoRange)+0.5)
 }
 
 type Servo struct {
