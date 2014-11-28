@@ -211,7 +211,7 @@ func (gpio *GPIO) DisableEdgeDetection() {
 }
 
 // StartEdgeDetectCallbacks starts a thread that calls callback for every
-// detected edge. An error or DisableEdgeDetection will stops the thread.
+// detected edge. An error or DisableEdgeDetection stops the thread.
 func (gpio *GPIO) StartEdgeDetectCallbacks(edge Edge, callback func(Value)) {
 	go func() {
 		runtime.LockOSThread()
@@ -228,7 +228,7 @@ func (gpio *GPIO) StartEdgeDetectCallbacks(edge Edge, callback func(Value)) {
 // StartEdgeDetectEvents starts a thread that sends EdgeEvent instances into
 // the events channel for every edge. EdgeEvent contains the time of the event,
 // to be also useful for buffered channels where the events are read later.
-// An error or DisableEdgeDetection will stops the thread.
+// An error or DisableEdgeDetection stops the thread.
 func (gpio *GPIO) StartEdgeDetectEvents(edge Edge, events chan EdgeEvent) {
 	gpio.StartEdgeDetectCallbacks(edge, func(value Value) {
 		events <- EdgeEvent{time.Now(), value}
