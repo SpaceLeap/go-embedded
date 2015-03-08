@@ -7,7 +7,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ungerik/go-quick"
+	"github.com/ungerik/go-dry"
 )
 
 type Value int
@@ -54,7 +54,7 @@ const (
 type GPIO struct {
 	nr        int
 	valueFile *os.File
-	epollFd   quick.SyncInt
+	epollFd   dry.SyncInt
 	edge      Edge
 }
 
@@ -62,7 +62,7 @@ type GPIO struct {
 func NewGPIO(nr int, direction Direction) (*GPIO, error) {
 	gpio := &GPIO{nr: nr}
 
-	err := quick.FilePrintf("/sys/class/gpio/export", "%d", gpio.nr)
+	err := dry.FilePrintf("/sys/class/gpio/export", "%d", gpio.nr)
 	if err != nil {
 		return nil, err
 	}
@@ -83,18 +83,18 @@ func (gpio *GPIO) Close() error {
 		gpio.valueFile.Close()
 	}
 
-	return quick.FilePrintf("/sys/class/gpio/unexport", "%d", gpio.nr)
+	return dry.FilePrintf("/sys/class/gpio/unexport", "%d", gpio.nr)
 }
 
 func (gpio *GPIO) Direction() (Direction, error) {
 	filename := fmt.Sprintf("/sys/class/gpio/gpio%d/direction", gpio.nr)
-	direction, err := quick.FileGetString(filename)
+	direction, err := dry.FileGetString(filename)
 	return Direction(direction), err
 }
 
 func (gpio *GPIO) SetDirection(direction Direction) error {
 	filename := fmt.Sprintf("/sys/class/gpio/gpio%d/direction", gpio.nr)
-	return quick.FileSetString(filename, string(direction))
+	return dry.FileSetString(filename, string(direction))
 }
 
 // func (gpio *GPIO) SetPullUpDown(pull PullUpDown) error {
@@ -145,7 +145,7 @@ func (gpio *GPIO) setEdge(edge Edge) error {
 		return nil
 	}
 	filename := fmt.Sprintf("/sys/class/gpio/gpio%d/edge", gpio.nr)
-	err := quick.FileSetString(filename, string(edge))
+	err := dry.FileSetString(filename, string(edge))
 	if err == nil {
 		gpio.edge = edge
 	}

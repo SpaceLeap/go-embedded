@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ungerik/go-quick"
+	"github.com/ungerik/go-dry"
 )
 
 var ctrlDir string
@@ -39,7 +39,7 @@ func BuildPath(partialPath, prefix string) (string, error) {
 func LoadDeviceTree(name string) error {
 	slots := ctrlDir + "/slots"
 
-	data, err := quick.FileGetString(slots)
+	data, err := dry.FileGetString(slots)
 	if err != nil {
 		return err
 	}
@@ -48,7 +48,7 @@ func LoadDeviceTree(name string) error {
 		return nil
 	}
 
-	err = quick.FileSetString(slots, name)
+	err = dry.FileSetString(slots, name)
 	if err == nil {
 		time.Sleep(time.Millisecond * 200)
 	}
