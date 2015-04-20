@@ -51,6 +51,10 @@ const (
 	PUD_UP   PullUpDown = 2
 )
 
+func IsExported(nr int) bool {
+	return dry.FileExists(fmt.Sprintf("/sys/class/gpio/gpio%d/", nr))
+}
+
 type GPIO struct {
 	nr        int
 	valueFile *os.File
@@ -59,13 +63,15 @@ type GPIO struct {
 }
 
 // NewGPIO exports the GPIO pin nr.
-func NewGPIO(nr int, direction Direction) (*GPIO, error) {
-	gpio := &GPIO{nr: nr}
-
-	err := dry.FilePrintf("/sys/class/gpio/export", "%d", gpio.nr)
-	if err != nil {
-		return nil, err
+func NewGPIO(nr int, direction Direction) (gpio *GPIO, err error) {
+	if !IsExported(nr) {
+		err = dry.FilePrintf("/sys/class/gpio/export", "%d", nr)
+		if err != nil {
+			return nil, err
+		}
 	}
+
+	gpio = &GPIO{nr: nr}
 
 	err = gpio.SetDirection(direction)
 	if err != nil {
@@ -83,6 +89,9 @@ func (gpio *GPIO) Close() error {
 		gpio.valueFile.Close()
 	}
 
+	if !IsExported(gpio.nr) {
+		return nil
+	}
 	return dry.FilePrintf("/sys/class/gpio/unexport", "%d", gpio.nr)
 }
 

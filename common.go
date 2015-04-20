@@ -36,19 +36,20 @@ func BuildPath(partialPath, prefix string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-func LoadDeviceTree(name string) error {
-	slots := ctrlDir + "/slots"
-
-	data, err := dry.FileGetString(slots)
+func IsDeviceTreeLoaded(name string) bool {
+	data, err := dry.FileGetString(ctrlDir + "/slots")
 	if err != nil {
-		return err
+		return false
 	}
+	return strings.Contains(data, name)
+}
 
-	if strings.Contains(data, name) {
+func LoadDeviceTree(name string) error {
+	if IsDeviceTreeLoaded(name) {
 		return nil
 	}
 
-	err = dry.FileSetString(slots, name)
+	err = dry.FileSetString(ctrlDir+"/slots", name)
 	if err == nil {
 		time.Sleep(time.Millisecond * 200)
 	}
@@ -56,9 +57,7 @@ func LoadDeviceTree(name string) error {
 }
 
 func UnloadDeviceTree(name string) error {
-	slots := ctrlDir + "/slots"
-
-	file, err := os.OpenFile(slots, os.O_RDWR, 0660)
+	file, err := os.OpenFile(ctrlDir+"/slots", os.O_RDWR, 0660)
 	if err != nil {
 		return err
 	}
@@ -68,9 +67,8 @@ func UnloadDeviceTree(name string) error {
 	line, err := reader.ReadString('\n')
 	for err != nil {
 		if strings.Contains(line, name) {
-			line = line[:strings.IndexRune(line, ':')]
-			line = strings.TrimSpace(line)
-			_, err = file.WriteString("-" + line)
+			slot := strings.TrimSpace(line[:strings.IndexRune(line, ':')])
+			_, err = file.WriteString("-" + slot)
 			return err
 		}
 		line, err = reader.ReadString('\n')
