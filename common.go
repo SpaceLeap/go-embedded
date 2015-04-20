@@ -49,7 +49,7 @@ func LoadDeviceTree(name string) error {
 		return nil
 	}
 
-	err = dry.FileSetString(ctrlDir+"/slots", name)
+	err := dry.FileSetString(ctrlDir+"/slots", name)
 	if err == nil {
 		time.Sleep(time.Millisecond * 200)
 	}
