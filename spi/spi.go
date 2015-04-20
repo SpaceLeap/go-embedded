@@ -51,6 +51,8 @@ func Init(deviceTree string) {
 }
 
 type SPI struct {
+	bus         int
+	device      int
 	file        *os.File /* open file descriptor: /dev/spi-X.Y */
 	mode        uint8    /* current SPI mode */
 	bitsPerWord uint8    /* current SPI bits per word setting */
@@ -69,14 +71,13 @@ type SPI struct {
 //
 // Because the SPI device interface is opened R/W, users of this
 // module usually must have root permissions.
-func NewSPI(bus, device int) (*SPI, error) {
-	deviceTreeName := fmt.Sprintf("%s%d", deviceTreePrefix, bus)
-	err := embedded.LoadDeviceTree(deviceTreeName)
+func NewSPI(bus, device int) (spi *SPI, err error) {
+	err = embedded.LoadDeviceTree(fmt.Sprintf("%s%d", deviceTreePrefix, bus))
 	if err != nil {
 		return nil, err
 	}
 
-	spi := new(SPI)
+	spi = &SPI{bus: bus, device: device}
 
 	path := fmt.Sprintf("/dev/spidev%d.%d", bus+1, device)
 	spi.file, err = os.OpenFile(path, os.O_RDWR, 0)
@@ -100,6 +101,11 @@ func NewSPI(bus, device int) (*SPI, error) {
 	}
 
 	return spi, nil
+}
+
+// Disconnects the object from the interface.
+func (spi *SPI) Close() error {
+	return spi.file.Close()
 }
 
 // Read len(data) bytes from SPI device.
@@ -178,11 +184,6 @@ func (spi *SPI) Xfer2(txBuf []byte, delay_usecs uint16) (rxBuf []byte, err error
 	syscall.Syscall(syscall.SYS_READ, spi.file.Fd(), uintptr(unsafe.Pointer(&rxBuf[0])), 0)
 
 	return rxBuf, nil
-}
-
-// Disconnects the object from the interface.
-func (spi *SPI) Close() error {
-	return spi.file.Close()
 }
 
 func (spi *SPI) Mode() Mode {

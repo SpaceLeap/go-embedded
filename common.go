@@ -57,6 +57,10 @@ func LoadDeviceTree(name string) error {
 }
 
 func UnloadDeviceTree(name string) error {
+	if !IsDeviceTreeLoaded(name) {
+		return nil
+	}
+
 	file, err := os.OpenFile(ctrlDir+"/slots", os.O_RDWR, 0660)
 	if err != nil {
 		return err

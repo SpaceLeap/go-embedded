@@ -60,6 +60,10 @@ func NewI2C(bus, address int) (*I2C, error) {
 	return i2c, nil
 }
 
+func (i2c *I2C) Close() error {
+	return wrapErr("Close", i2c.file.Close())
+}
+
 func (i2c *I2C) Address() int {
 	return i2c.address
 }
@@ -284,8 +288,4 @@ func (i2c *I2C) Read(p []byte) (n int, err error) {
 func (i2c *I2C) Write(p []byte) (n int, err error) {
 	n, err = i2c.file.Write(p)
 	return n, wrapErr("Write", err)
-}
-
-func (i2c *I2C) Close() error {
-	return wrapErr("Close", i2c.file.Close())
 }

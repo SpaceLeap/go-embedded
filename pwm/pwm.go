@@ -45,12 +45,9 @@ func Cleanup() error {
 }
 
 func NewPWM(key string, period, duty time.Duration, polarity Polarity) (*PWM, error) {
-	deviceTree := devicePrefix + key
-	if !embedded.IsDeviceTreeLoaded(deviceTree) {
-		err := embedded.LoadDeviceTree(deviceTree)
-		if err != nil {
-			return nil, err
-		}
+	err := embedded.LoadDeviceTree(devicePrefix + key)
+	if err != nil {
+		return nil, err
 	}
 
 	ocpDir, err := embedded.BuildPath("/sys/devices", "ocp")
@@ -116,11 +113,7 @@ func (pwm *PWM) Close() error {
 	pwm.dutyFile.Close()
 	pwm.polarityFile.Close()
 
-	deviceTree := devicePrefix + pwm.key
-	if !embedded.IsDeviceTreeLoaded(deviceTree) {
-		return nil
-	}
-	return embedded.UnloadDeviceTree(deviceTree)
+	return embedded.UnloadDeviceTree(devicePrefix + pwm.key)
 }
 
 func (pwm *PWM) Key() string {

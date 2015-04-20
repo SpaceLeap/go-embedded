@@ -43,6 +43,10 @@ func Init(deviceTreePrefix string) error {
 	return nil
 }
 
+func Cleanup() error {
+	return embedded.UnloadDeviceTree(deviceTree)
+}
+
 type ADC struct {
 	ain  Name
 	file *os.File
@@ -58,6 +62,10 @@ func NewADC(ain Name) (*ADC, error) {
 	return &ADC{ain, file}, nil
 }
 
+func (adc *ADC) Close() error {
+	return adc.file.Close()
+}
+
 func (adc *ADC) AIn() Name {
 	return adc.ain
 }
@@ -70,12 +78,4 @@ func (adc *ADC) ReadRaw() (value float32) {
 
 func (adc *ADC) ReadValue() (value float32) {
 	return adc.ReadRaw() / 1800.0
-}
-
-func (adc *ADC) Close() error {
-	return adc.file.Close()
-}
-
-func CleanupADC() error {
-	return embedded.UnloadDeviceTree(deviceTree)
 }
